@@ -40,7 +40,7 @@ func (c *structCodec) Decode(v map[string]interface{}) (interface{}, error) {
 
 func StructCodec(d interface{}) DataCodec {
 	return &structCodec{
-		typ: reflect.TypeOf(d),
+		typ: reflect.Indirect(reflect.ValueOf(d)).Type(),
 	}
 }
 
@@ -75,7 +75,7 @@ func (c jsonCodec) Decode(v map[string]interface{}) (interface{}, error) {
 
 func JsonCodec(d interface{}) DataCodec {
 	return &jsonCodec{
-		typ: reflect.TypeOf(d),
+		typ: reflect.Indirect(reflect.ValueOf(d)).Type(),
 	}
 }
 
@@ -110,6 +110,6 @@ func (c msgpackCodec) Decode(v map[string]interface{}) (interface{}, error) {
 
 func MsgpackCodec(d interface{}) DataCodec {
 	return &msgpackCodec{
-		typ: reflect.TypeOf(d),
+		typ: reflect.Indirect(reflect.ValueOf(d)).Type(),
 	}
 }

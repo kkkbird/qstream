@@ -52,7 +52,7 @@ func benchmarkCodec(b *testing.B, codec DataCodec) {
 }
 
 func TestStructCodec(t *testing.T) {
-	testCodec(t, StructCodec(SimpleData{}))
+	testCodec(t, StructCodec(&SimpleData{}))
 }
 
 func BenchmarkStructCodec(b *testing.B) {
