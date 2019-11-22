@@ -259,11 +259,11 @@ func (s *RedisStreamGroupSub) Ack(streamKeyOrIndex interface{}, msgIDs ...string
 	return ErrInvalidStreamID
 }
 
-func NewRedisStreamGroupSub(redisClient *redis.Client, codec DataCodec, group string, consumer string, noack bool, keys ...string) *RedisStreamGroupSub {
+func NewRedisStreamGroupSub(redisClient *redis.Client, codec DataCodec, group string, groupStartID string, consumer string, noack bool, keys ...string) *RedisStreamGroupSub {
 	return &RedisStreamGroupSub{
 		baseRedisStreamSub: newBaseRedisStreamSub(redisClient, codec, keys...),
 		Group:              group,
-		GroupStartID:       "0-0", // currently we alway create group start id at 0
+		GroupStartID:       groupStartID,
 		Consumer:           consumer,
 		NoAck:              noack,
 	}
