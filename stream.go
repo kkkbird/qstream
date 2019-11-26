@@ -70,23 +70,33 @@ func NewRedisStreamPub(redisClient *redis.Client, key string, maxLenApprox int64
 	}
 }
 
-func xstream2Data(xstream []redis.XStream, codec DataCodec) (map[string][]StreamSubResult, error) {
+func XMessage2Data(xmsg []redis.XMessage, codec DataCodec) ([]StreamSubResult, error) {
+
+	msgs := make([]StreamSubResult, len(xmsg))
+
+	for i, msg := range xmsg {
+		d, err := codec.Decode(msg.Values)
+
+		if err != nil {
+			return nil, err //TODO: we may continue and report error for single stream
+		}
+
+		msgs[i] = StreamSubResult{
+			StreamID: msg.ID,
+			Data:     d,
+		}
+	}
+	return msgs, nil
+}
+
+func XStream2Data(xstream []redis.XStream, codec DataCodec) (map[string][]StreamSubResult, error) {
 	rlt := make(map[string][]StreamSubResult)
 
 	for _, stream := range xstream {
-		msgs := make([]StreamSubResult, len(stream.Messages))
+		msgs, err := XMessage2Data(stream.Messages, codec)
 
-		for i, msg := range stream.Messages {
-			d, err := codec.Decode(msg.Values)
-
-			if err != nil {
-				return nil, err //TODO: we may continue and report error for single stream
-			}
-
-			msgs[i] = StreamSubResult{
-				StreamID: msg.ID,
-				Data:     d,
-			}
+		if err != nil {
+			return nil, err //TODO: we may continue and report error for single stream
 		}
 
 		rlt[stream.Stream] = msgs
@@ -154,7 +164,7 @@ func (s *RedisStreamSub) Read(count int64, block time.Duration, ids ...string) (
 		return nil, err
 	}
 
-	return xstream2Data(rlt, s.codec)
+	return XStream2Data(rlt, s.codec)
 }
 
 func (s *RedisStreamSub) Ack(streamKeyOrIndex interface{}, msgIDs ...string) error {
@@ -237,7 +247,7 @@ func (s *RedisStreamGroupSub) Read(count int64, block time.Duration, ids ...stri
 		return nil, err
 	}
 
-	return xstream2Data(rlt, s.codec)
+	return XStream2Data(rlt, s.codec)
 }
 
 func (s *RedisStreamGroupSub) Ack(streamKeyOrIndex interface{}, msgIDs ...string) error {
