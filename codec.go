@@ -3,6 +3,7 @@ package qstream
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"reflect"
 
@@ -12,8 +13,41 @@ import (
 )
 
 var (
-	ErrDataDecodeFail = errors.New("ErrDataDecodeFail")
+	ErrDataDecodeFail  = errors.New("ErrDataDecodeFail")
+	ErrTypeNotRegister = errors.New("Type not register")
+	ErrTypeNameMissing = errors.New("Missing type name")
 )
+
+type typeRegistry map[string]reflect.Type
+
+func (tr *typeRegistry) Get(d interface{}) (reflect.Type, string) {
+	tname := fmt.Sprintf("%T", reflect.Indirect(reflect.ValueOf(d)).Interface())
+
+	return tr.GetByName(tname), tname
+}
+
+func (tr *typeRegistry) GetByName(tname string) reflect.Type {
+
+	if typ, ok := (*tr)[tname]; ok {
+		return typ
+	}
+
+	return nil
+}
+
+func newTypeRegistry(d []interface{}) typeRegistry {
+	if len(d) == 0 {
+		panic("must have a type")
+	}
+
+	r := make(map[string]reflect.Type)
+	for _, dtyp := range d {
+		v := reflect.Indirect(reflect.ValueOf(dtyp))
+		r[fmt.Sprintf("%T", v.Interface())] = v.Type()
+	}
+
+	return typeRegistry(r)
+}
 
 type DataCodec interface {
 	Encode(interface{}) (map[string]interface{}, error)
@@ -45,10 +79,16 @@ func StructCodec(d interface{}) DataCodec {
 }
 
 type jsonCodec struct {
-	typ reflect.Type
+	tr typeRegistry
 }
 
 func (c jsonCodec) Encode(d interface{}) (map[string]interface{}, error) {
+	typ, tname := c.tr.Get(d)
+
+	if typ == nil {
+		return nil, ErrTypeNotRegister
+	}
+
 	d2, err := json.Marshal(d)
 
 	if err != nil {
@@ -56,26 +96,38 @@ func (c jsonCodec) Encode(d interface{}) (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"d": string(d2),
+		"___typ": tname,
+		"d":      string(d2),
 	}, nil
 }
 
 func (c jsonCodec) Decode(v map[string]interface{}) (interface{}, error) {
+	tname, ok := v["___typ"]
+	if !ok {
+		return nil, ErrTypeNameMissing
+	}
+
 	d2, ok := v["d"]
 	if !ok {
 		return nil, ErrDataDecodeFail
 	}
 
-	d := reflect.New(c.typ)
+	typ := c.tr.GetByName(tname.(string))
+
+	if typ == nil {
+		return nil, ErrTypeNotRegister
+	}
+
+	d := reflect.New(typ)
 	if err := json.Unmarshal([]byte(d2.(string)), d.Interface()); err != nil {
 		return nil, err
 	}
 	return d.Interface(), nil
 }
 
-func JsonCodec(d interface{}) DataCodec {
+func JsonCodec(d ...interface{}) DataCodec {
 	return &jsonCodec{
-		typ: reflect.Indirect(reflect.ValueOf(d)).Type(),
+		tr: newTypeRegistry(d),
 	}
 }
 
