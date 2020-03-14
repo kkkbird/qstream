@@ -75,6 +75,14 @@ func XMessage2Data(xmsg []redis.XMessage, codec DataCodec) ([]StreamSubResult, e
 	msgs := make([]StreamSubResult, len(xmsg))
 
 	for i, msg := range xmsg {
+		if len(msg.Values) == 0 { // may the msg is trimmed and become nil
+			msgs[i] = StreamSubResult{
+				StreamID: msg.ID,
+				Data:     nil,
+			}
+			continue
+		}
+
 		d, err := codec.Decode(msg.Values)
 
 		if err != nil {
@@ -93,6 +101,9 @@ func XStream2Data(xstream []redis.XStream, codec DataCodec) (map[string][]Stream
 	rlt := make(map[string][]StreamSubResult)
 
 	for _, stream := range xstream {
+		if len(stream.Messages) == 0 {
+			continue
+		}
 		msgs, err := XMessage2Data(stream.Messages, codec)
 
 		if err != nil {
