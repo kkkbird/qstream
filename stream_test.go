@@ -56,7 +56,7 @@ func (s *StreamTestSuite) TestStreamInterface() {
 		return
 	}
 
-	sub = NewRedisStreamGroupSub(s.redisClient, s.codec, "tester", "testerInterface", true, stream)
+	sub = NewRedisStreamGroupSub(s.redisClient, s.codec, "tester", "$", "testerInterface", true, stream)
 	if !s.Equal(stream, sub.GetKeys()[0]) {
 		return
 	}
@@ -118,7 +118,7 @@ func (s *StreamTestSuite) TestDataGroupRead() {
 	}
 	log.Infof("pub stream id:%s", streamID)
 
-	sub := NewRedisStreamGroupSub(s.redisClient, s.codec, "testgroup", "testconsumer", false, stream)
+	sub := NewRedisStreamGroupSub(s.redisClient, s.codec, "testgroup", "$", "testconsumer", false, stream)
 
 	rlts, err := sub.Read(10, -1, ">")
 	if !s.Error(redis.Nil) {
