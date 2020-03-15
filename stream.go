@@ -102,6 +102,7 @@ func XStream2Data(xstream []redis.XStream, codec DataCodec) (map[string][]Stream
 
 	for _, stream := range xstream {
 		if len(stream.Messages) == 0 {
+			rlt[stream.Stream] = nil
 			continue
 		}
 		msgs, err := XMessage2Data(stream.Messages, codec)
