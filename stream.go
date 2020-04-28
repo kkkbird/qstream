@@ -12,6 +12,7 @@ import (
 var (
 	ErrAckNotRequired  = errors.New("ErrAckNotRequired")
 	ErrInvalidStreamID = errors.New("ErrInvalidStreamID")
+	ErrMessageTrimmed  = errors.New("data trimmed")
 )
 
 type StreamPub interface {
@@ -29,6 +30,7 @@ type StreamSub interface {
 type StreamSubResult struct {
 	StreamID string
 	Data     interface{}
+	Err      error // Data codec err
 }
 
 type RedisStreamPub struct {
@@ -71,14 +73,13 @@ func NewRedisStreamPub(redisClient *redis.Client, key string, maxLenApprox int64
 }
 
 func XMessage2Data(xmsg []redis.XMessage, codec DataCodec) ([]StreamSubResult, error) {
-
 	msgs := make([]StreamSubResult, len(xmsg))
 
 	for i, msg := range xmsg {
 		if len(msg.Values) == 0 { // may the msg is trimmed and become nil
 			msgs[i] = StreamSubResult{
 				StreamID: msg.ID,
-				Data:     nil,
+				Err:      ErrMessageTrimmed,
 			}
 			continue
 		}
@@ -86,7 +87,11 @@ func XMessage2Data(xmsg []redis.XMessage, codec DataCodec) ([]StreamSubResult, e
 		d, err := codec.Decode(msg.Values)
 
 		if err != nil {
-			return nil, err //TODO: we may continue and report error for single stream
+			msgs[i] = StreamSubResult{
+				StreamID: msg.ID,
+				Err:      err,
+			}
+			continue
 		}
 
 		msgs[i] = StreamSubResult{
@@ -108,7 +113,7 @@ func XStream2Data(xstream []redis.XStream, codec DataCodec) (map[string][]Stream
 		msgs, err := XMessage2Data(stream.Messages, codec)
 
 		if err != nil {
-			return nil, err //TODO: we may continue and report error for single stream
+			return nil, err
 		}
 
 		rlt[stream.Stream] = msgs
