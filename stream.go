@@ -1,12 +1,13 @@
 package qstream
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 )
 
 var (
@@ -16,15 +17,15 @@ var (
 )
 
 type StreamPub interface {
-	Send(data interface{}) (string, error)
+	Send(ctx context.Context, data interface{}) (string, error)
 	GetKey() string
 }
 
 type StreamSub interface {
-	Read(count int64, block time.Duration, ids ...string) (map[string][]StreamSubResult, error)
+	Read(ctx context.Context, count int64, block time.Duration, ids ...string) (map[string][]StreamSubResult, error)
 	GetKeys() []string
-	GetKeyIndex(string) int
-	Ack(streamKeyOrIndex interface{}, msgIDs ...string) error
+	GetKeyIndex(key string) int
+	Ack(ctx context.Context, streamKeyOrIndex interface{}, msgIDs ...string) error
 }
 
 type StreamSubResult struct {
@@ -40,13 +41,13 @@ type RedisStreamPub struct {
 	codec        DataCodec
 }
 
-func (s *RedisStreamPub) Send(data interface{}) (string, error) {
+func (s *RedisStreamPub) Send(ctx context.Context, data interface{}) (string, error) {
 	vals, err := s.codec.Encode(data)
 	if err != nil {
 		return "", err
 	}
 
-	rlt, err := s.redisClient.XAdd(&redis.XAddArgs{
+	rlt, err := s.redisClient.XAdd(ctx, &redis.XAddArgs{
 		Stream:       s.StreamKey,
 		MaxLenApprox: s.MaxLenApprox,
 		Values:       vals,
@@ -161,7 +162,7 @@ type RedisStreamSub struct {
 	*baseRedisStreamSub
 }
 
-func (s *RedisStreamSub) Read(count int64, block time.Duration, ids ...string) (map[string][]StreamSubResult, error) {
+func (s *RedisStreamSub) Read(ctx context.Context, count int64, block time.Duration, ids ...string) (map[string][]StreamSubResult, error) {
 	streams := s.StreamKeys
 	if ids == nil {
 		for range s.StreamKeys {
@@ -171,7 +172,7 @@ func (s *RedisStreamSub) Read(count int64, block time.Duration, ids ...string) (
 		streams = append(s.StreamKeys, ids...)
 	}
 
-	rlt, err := s.redisClient.XRead(&redis.XReadArgs{
+	rlt, err := s.redisClient.XRead(ctx, &redis.XReadArgs{
 		Streams: streams,
 		Count:   count,
 		Block:   block,
@@ -184,7 +185,7 @@ func (s *RedisStreamSub) Read(count int64, block time.Duration, ids ...string) (
 	return XStream2Data(rlt, s.codec)
 }
 
-func (s *RedisStreamSub) Ack(streamKeyOrIndex interface{}, msgIDs ...string) error {
+func (s *RedisStreamSub) Ack(ctx context.Context, streamKeyOrIndex interface{}, msgIDs ...string) error {
 	return ErrAckNotRequired
 }
 
@@ -204,7 +205,7 @@ type RedisStreamGroupSub struct {
 	checkErr     error
 }
 
-func (s *RedisStreamGroupSub) checkStreamAndGroup() {
+func (s *RedisStreamGroupSub) checkStreamAndGroup(ctx context.Context) {
 	var err error
 	// do not check redis
 	// if err = s.redisClient.Ping().Err(); err != nil {
@@ -213,7 +214,7 @@ func (s *RedisStreamGroupSub) checkStreamAndGroup() {
 	// }
 
 	for _, stream := range s.StreamKeys {
-		err = s.redisClient.XGroupCreate(stream, s.Group, s.GroupStartID).Err()
+		err = s.redisClient.XGroupCreate(ctx, stream, s.Group, s.GroupStartID).Err()
 
 		if err == nil {
 			continue //create group ok, just continue
@@ -224,7 +225,7 @@ func (s *RedisStreamGroupSub) checkStreamAndGroup() {
 		}
 
 		// may the streamid not exist, create group with an empty group
-		err = s.redisClient.XGroupCreateMkStream(stream, s.Group, s.GroupStartID).Err()
+		err = s.redisClient.XGroupCreateMkStream(ctx, stream, s.Group, s.GroupStartID).Err()
 
 		if err != nil {
 			s.checkErr = err // still has error, should be redis problem, in this case, the GroupSub cannot recover
@@ -235,8 +236,8 @@ func (s *RedisStreamGroupSub) checkStreamAndGroup() {
 // Read will create the group if stream exist, and will create an empty stream if stream no exist
 // note if pass id ">" and no new data, it will return redis.Nil,
 // if pass id "0-0", it will returen a stream name map with zero length data
-func (s *RedisStreamGroupSub) Read(count int64, block time.Duration, ids ...string) (map[string][]StreamSubResult, error) {
-	s.checkOnce.Do(s.checkStreamAndGroup)
+func (s *RedisStreamGroupSub) Read(ctx context.Context, count int64, block time.Duration, ids ...string) (map[string][]StreamSubResult, error) {
+	s.checkOnce.Do(func() { s.checkStreamAndGroup(ctx) })
 
 	if s.checkErr != nil {
 		return nil, s.checkErr
@@ -251,7 +252,7 @@ func (s *RedisStreamGroupSub) Read(count int64, block time.Duration, ids ...stri
 		streams = append(s.StreamKeys, ids...)
 	}
 
-	rlt, err := s.redisClient.XReadGroup(&redis.XReadGroupArgs{
+	rlt, err := s.redisClient.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    s.Group,
 		Consumer: s.Consumer,
 		Streams:  streams,
@@ -267,20 +268,20 @@ func (s *RedisStreamGroupSub) Read(count int64, block time.Duration, ids ...stri
 	return XStream2Data(rlt, s.codec)
 }
 
-func (s *RedisStreamGroupSub) Ack(streamKeyOrIndex interface{}, msgIDs ...string) error {
+func (s *RedisStreamGroupSub) Ack(ctx context.Context, streamKeyOrIndex interface{}, msgIDs ...string) error {
 
 	switch k := streamKeyOrIndex.(type) {
 	case int:
 		if k < len(s.StreamKeys) {
-			return s.redisClient.XAck(s.StreamKeys[k], s.Group, msgIDs...).Err()
+			return s.redisClient.XAck(ctx, s.StreamKeys[k], s.Group, msgIDs...).Err()
 		}
 	case string:
 		for _, key := range s.StreamKeys { // find a valid stream key
 			if key == k {
-				return s.redisClient.XAck(k, s.Group, msgIDs...).Err()
+				return s.redisClient.XAck(ctx, k, s.Group, msgIDs...).Err()
 			}
 		}
-		return s.redisClient.XAck(k, s.Group, msgIDs...).Err()
+		return s.redisClient.XAck(ctx, k, s.Group, msgIDs...).Err()
 	}
 
 	return ErrInvalidStreamID

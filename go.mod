@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/fatih/structs v1.1.0
-	github.com/go-redis/redis/v7 v7.4.0
+	github.com/go-redis/redis/v8 v8.2.2
 	github.com/mitchellh/mapstructure v1.3.3
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/viper v1.7.1

@@ -1,11 +1,12 @@
 package qstream
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/go-redis/redis/v8"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/suite"
 )
@@ -63,6 +64,7 @@ func (s *StreamTestSuite) TestStreamInterface() {
 }
 
 func (s *StreamTestSuite) TestDataPubAndSub() {
+	ctx := context.Background()
 	d := &SimpleData{
 		ID:      1234,
 		Message: "Hello",
@@ -71,7 +73,7 @@ func (s *StreamTestSuite) TestDataPubAndSub() {
 	stream := "qstream:test"
 
 	pub := NewRedisStreamPub(s.redisClient, stream, 20, s.codec)
-	streamID, err := pub.Send(d)
+	streamID, err := pub.Send(ctx, d)
 
 	if !s.NoError(err) {
 		return
@@ -80,12 +82,12 @@ func (s *StreamTestSuite) TestDataPubAndSub() {
 
 	sub := NewRedisStreamSub(s.redisClient, s.codec, stream)
 
-	rlts, err := sub.Read(10, -1, "$")
+	rlts, err := sub.Read(ctx, 10, -1, "$")
 	if !s.Error(redis.Nil) {
 		return
 	}
 
-	rlts, err = sub.Read(10, -1, "0")
+	rlts, err = sub.Read(ctx, 10, -1, "0")
 
 	if !s.NoError(err) {
 		return
@@ -103,6 +105,8 @@ func (s *StreamTestSuite) TestDataPubAndSub() {
 }
 
 func (s *StreamTestSuite) TestDataGroupRead() {
+	ctx := context.Background()
+
 	d := &SimpleData{
 		ID:      1234,
 		Message: "Hello Group",
@@ -111,7 +115,7 @@ func (s *StreamTestSuite) TestDataGroupRead() {
 	stream := "qstream:testgroup"
 
 	pub := NewRedisStreamPub(s.redisClient, stream, 20, s.codec)
-	streamID, err := pub.Send(d)
+	streamID, err := pub.Send(ctx, d)
 
 	if !s.NoError(err) {
 		return
@@ -120,12 +124,12 @@ func (s *StreamTestSuite) TestDataGroupRead() {
 
 	sub := NewRedisStreamGroupSub(s.redisClient, s.codec, "testgroup", "$", "testconsumer", false, stream)
 
-	rlts, err := sub.Read(10, -1, ">")
+	rlts, err := sub.Read(ctx, 10, -1, ">")
 	if !s.Error(redis.Nil) {
 		return
 	}
 
-	rlts, err = sub.Read(10, -1, "0")
+	rlts, err = sub.Read(ctx, 10, -1, "0")
 
 	if !s.NoError(err) {
 		return
@@ -152,6 +156,7 @@ func BenchmarkSteamRead(b *testing.B) {
 		Password: "12345678",
 		DB:       0,
 	})
+	ctx := context.Background()
 
 	defer redisClient.Close()
 
@@ -160,7 +165,7 @@ func BenchmarkSteamRead(b *testing.B) {
 	//sub := NewRedisStreamSub(redisClient, &customizeCodec{}, stream)
 
 	for i := 0; i < b.N; i++ {
-		rlt, err := sub.Read(100, -1, "0")
+		rlt, err := sub.Read(ctx, 100, -1, "0")
 		_, _ = rlt, err
 	}
 }
