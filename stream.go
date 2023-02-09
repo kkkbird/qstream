@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -35,10 +35,10 @@ type StreamSubResult struct {
 }
 
 type RedisStreamPub struct {
-	redisClient  *redis.Client
-	StreamKey    string
-	MaxLenApprox int64
-	codec        DataCodec
+	redisClient *redis.Client
+	StreamKey   string
+	MaxLen      int64
+	codec       DataCodec
 }
 
 func (s *RedisStreamPub) Send(ctx context.Context, data interface{}) (string, error) {
@@ -48,9 +48,10 @@ func (s *RedisStreamPub) Send(ctx context.Context, data interface{}) (string, er
 	}
 
 	rlt, err := s.redisClient.XAdd(ctx, &redis.XAddArgs{
-		Stream:       s.StreamKey,
-		MaxLenApprox: s.MaxLenApprox,
-		Values:       vals,
+		Stream: s.StreamKey,
+		MaxLen: s.MaxLen,
+		Approx: true,
+		Values: vals,
 	}).Result()
 
 	if err != nil {
@@ -64,12 +65,12 @@ func (s *RedisStreamPub) GetKey() string {
 	return s.StreamKey
 }
 
-func NewRedisStreamPub(redisClient *redis.Client, key string, maxLenApprox int64, codec DataCodec) *RedisStreamPub {
+func NewRedisStreamPub(redisClient *redis.Client, key string, maxLen int64, codec DataCodec) *RedisStreamPub {
 	return &RedisStreamPub{
-		redisClient:  redisClient,
-		StreamKey:    key,
-		MaxLenApprox: maxLenApprox,
-		codec:        codec,
+		redisClient: redisClient,
+		StreamKey:   key,
+		MaxLen:      maxLen,
+		codec:       codec,
 	}
 }
 

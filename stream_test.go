@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/go-redis/redis/v8"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/suite"
 )
