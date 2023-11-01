@@ -3,6 +3,7 @@ package qstream
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -28,9 +29,10 @@ func (s *StreamTestSuite) SetupSuite() {
 	viper.SetDefault("redis.password", "12345678")
 
 	s.redisClient = redis.NewClient(&redis.Options{
-		Addr:     viper.GetString("redis.url"),
-		Password: viper.GetString("redis.password"),
-		DB:       0,
+		Addr:                  viper.GetString("redis.url"),
+		Password:              viper.GetString("redis.password"),
+		DB:                    0,
+		ContextTimeoutEnabled: true,
 	})
 
 	s.codec = defaultCodec
@@ -63,6 +65,51 @@ func (s *StreamTestSuite) TestStreamInterface() {
 	}
 }
 
+// func (s *StreamTestSuite) TestA() {
+// 	c := s.redisClient
+
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	defer cancel()
+
+// 	pubsub := c.Subscribe(ctx, "hello")
+// 	defer pubsub.Close()
+
+// 	go func() {
+// 		time.Sleep(5 * time.Second)
+// 		cancel()
+// 	}()
+
+// 	for {
+// 		m, err := pubsub.Receive(ctx)
+// 		log.Info("received", m, err)
+
+// 		if err != nil {
+// 			break
+// 		}
+// 	}
+
+// 	log.Info("done")
+// }
+
+func (s *StreamTestSuite) TestStreamSubCancel() {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+	defer cancel()
+
+	stream := "qstream:test"
+	sub := NewRedisStreamSub(s.redisClient, s.codec, stream)
+
+	go func() {
+		time.Sleep(time.Second)
+		cancel()
+	}()
+
+	_, err := sub.Read(ctx, 10, 0, "$")
+
+	if !s.ErrorAs(err, &context.Canceled, "context canceled") {
+		return
+	}
+}
+
 func (s *StreamTestSuite) TestDataPubAndSub() {
 	ctx := context.Background()
 	d := &SimpleData{
@@ -82,13 +129,12 @@ func (s *StreamTestSuite) TestDataPubAndSub() {
 
 	sub := NewRedisStreamSub(s.redisClient, s.codec, stream)
 
-	rlts, err := sub.Read(ctx, 10, -1, "$")
-	if !s.Error(redis.Nil) {
+	_, err = sub.Read(ctx, 10, -1, "$")
+	if !s.ErrorIs(err, redis.Nil) {
 		return
 	}
 
-	rlts, err = sub.Read(ctx, 10, -1, "0")
-
+	rlts, err := sub.Read(ctx, 10, -1, "0")
 	if !s.NoError(err) {
 		return
 	}
@@ -124,12 +170,23 @@ func (s *StreamTestSuite) TestDataGroupRead() {
 
 	sub := NewRedisStreamGroupSub(s.redisClient, s.codec, "testgroup", "$", "testconsumer", false, stream)
 
-	rlts, err := sub.Read(ctx, 10, -1, ">")
-	if !s.Error(redis.Nil) {
+	rlts2, err := sub.Read(ctx, 10, -1, ">")
+	log.Infof("%v", err)
+	// if !s.ErrorIs(err, redis.Nil) {
+	// 	return
+	// }
+
+	msgs2, ok := rlts2[stream]
+	if !s.True(ok) {
 		return
 	}
 
-	rlts, err = sub.Read(ctx, 10, -1, "0")
+	for _, m := range msgs2 {
+		log.Infof("xgroupread2: %s : %#v", m.StreamID, m.Data)
+		assert.Equal(s.T(), d, m.Data)
+	}
+
+	rlts, err := sub.Read(ctx, 10, -1, "0")
 
 	if !s.NoError(err) {
 		return

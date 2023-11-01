@@ -236,7 +236,7 @@ func (s *RedisStreamGroupSub) checkStreamAndGroup(ctx context.Context) {
 
 // Read will create the group if stream exist, and will create an empty stream if stream no exist
 // note if pass id ">" and no new data, it will return redis.Nil,
-// if pass id "0-0", it will returen a stream name map with zero length data
+// if pass id "0-0", it will return a stream name map with zero length data
 func (s *RedisStreamGroupSub) Read(ctx context.Context, count int64, block time.Duration, ids ...string) (map[string][]StreamSubResult, error) {
 	s.checkOnce.Do(func() { s.checkStreamAndGroup(ctx) })
 
@@ -289,6 +289,10 @@ func (s *RedisStreamGroupSub) Ack(ctx context.Context, streamKeyOrIndex interfac
 }
 
 func NewRedisStreamGroupSub(redisClient *redis.Client, codec DataCodec, group string, groupStartID string, consumer string, noack bool, keys ...string) *RedisStreamGroupSub {
+	if !redisClient.Options().ContextTimeoutEnabled {
+		panic("redis client must enable context timeout")
+	}
+
 	return &RedisStreamGroupSub{
 		baseRedisStreamSub: newBaseRedisStreamSub(redisClient, codec, keys...),
 		Group:              group,
