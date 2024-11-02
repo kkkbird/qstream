@@ -173,26 +173,26 @@ func (s *RedisStreamSub) Read(ctx context.Context, count int64, block time.Durat
 		streams = append(s.StreamKeys, ids...)
 	}
 
-	// rlt, err := s.redisClient.XRead(ctx, &redis.XReadArgs{
-	// 	Streams: streams,
-	// 	Count:   count,
-	// 	Block:   block,
-	// }).Result()
-
-	conn := s.redisClient.Conn()
-	connectionID := conn.ClientID(ctx).Val()
-
-	stop := context.AfterFunc(ctx, func() {
-		// uses one of the pooled connections of the redis client to unblock the blocking connection
-		s.redisClient.ClientUnblock(context.Background(), connectionID)
-	})
-	defer stop()
-
-	rlt, err := conn.XRead(ctx, &redis.XReadArgs{
+	rlt, err := s.redisClient.XRead(ctx, &redis.XReadArgs{
 		Streams: streams,
 		Count:   count,
 		Block:   block,
 	}).Result()
+
+	// conn := s.redisClient.Conn()
+	// connectionID := conn.ClientID(ctx).Val()
+
+	// stop := context.AfterFunc(ctx, func() {
+	// 	// uses one of the pooled connections of the redis client to unblock the blocking connection
+	// 	s.redisClient.ClientUnblock(context.Background(), connectionID)
+	// })
+	// defer stop()
+
+	// rlt, err := conn.XRead(ctx, &redis.XReadArgs{
+	// 	Streams: streams,
+	// 	Count:   count,
+	// 	Block:   block,
+	// }).Result()
 
 	if err != nil {
 		return nil, err
@@ -268,16 +268,16 @@ func (s *RedisStreamGroupSub) Read(ctx context.Context, count int64, block time.
 		streams = append(s.StreamKeys, ids...)
 	}
 
-	conn := s.redisClient.Conn()
-	connectionID := conn.ClientID(ctx).Val()
+	// conn := s.redisClient.Conn()
+	// connectionID := conn.ClientID(ctx).Val()
 
-	stop := context.AfterFunc(ctx, func() {
-		// uses one of the pooled connections of the redis client to unblock the blocking connection
-		s.redisClient.ClientUnblock(context.Background(), connectionID)
-	})
-	defer stop()
+	// stop := context.AfterFunc(ctx, func() {
+	// 	// uses one of the pooled connections of the redis client to unblock the blocking connection
+	// 	s.redisClient.ClientUnblock(context.Background(), connectionID)
+	// })
+	// defer stop()
 
-	rlt, err := conn.XReadGroup(ctx, &redis.XReadGroupArgs{
+	rlt, err := s.redisClient.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    s.Group,
 		Consumer: s.Consumer,
 		Streams:  streams,

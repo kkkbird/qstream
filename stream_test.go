@@ -65,32 +65,31 @@ func (s *StreamTestSuite) TestStreamInterface() {
 	}
 }
 
-// user https://github.com/kkkbird/go-redis to fix it
-// func (s *StreamTestSuite) TestA() {
-// 	c := s.redisClient
+func (s *StreamTestSuite) TestA() {
+	c := s.redisClient
 
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-// 	pubsub := c.Subscribe(ctx, "hello")
-// 	defer pubsub.Close()
+	pubsub := c.Subscribe(ctx, "hello")
+	defer pubsub.Close()
 
-// 	go func() {
-// 		time.Sleep(5 * time.Second)
-// 		cancel()
-// 	}()
+	go func() {
+		time.Sleep(5 * time.Second)
+		cancel()
+	}()
 
-// 	for {
-// 		m, err := pubsub.Receive(ctx)
-// 		log.Info("received ", m, err)
+	for {
+		m, err := pubsub.Receive(ctx)
+		log.Info("received ", m, err)
 
-// 		if err != nil {
-// 			break
-// 		}
-// 	}
+		if err != nil {
+			break
+		}
+	}
 
-// 	log.Info("done")
-// }
+	log.Info("done")
+}
 
 func (s *StreamTestSuite) TestStreamSubCancel() {
 	ctx, cancel := context.WithCancel(context.Background())

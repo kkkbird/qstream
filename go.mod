@@ -42,4 +42,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// replace github.com/redis/go-redis/v9 => github.com/kkkbird/go-redis/v9 v9.0.0-20240802123143-d706765e3060
+replace github.com/redis/go-redis/v9 => github.com/kkkbird/go-redis/v9 v9.7.0
